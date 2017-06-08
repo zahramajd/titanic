@@ -1,5 +1,16 @@
 import numpy as np
 import pandas as pd
+from sklearn.ensemble import AdaBoostClassifier
+from sklearn.ensemble import BaggingClassifier
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import f1_score
+from sklearn.metrics import recall_score
+from sklearn.metrics import roc_auc_score
+from sklearn.neural_network import MLPClassifier
+from sklearn.tree import DecisionTreeClassifier
 
 
 def get_titles():
@@ -141,7 +152,6 @@ def process_ticket():
         else:
             return 'XXX'
 
-
     combined['Ticket'] = combined['Ticket'].map(cleanTicket)
     tickets_dummies = pd.get_dummies(combined['Ticket'], prefix='Ticket')
     combined = pd.concat([combined, tickets_dummies], axis=1)
@@ -154,6 +164,14 @@ def process_family():
     combined['Singleton'] = combined['FamilySize'].map(lambda s: 1 if s == 1 else 0)
     combined['SmallFamily'] = combined['FamilySize'].map(lambda s: 1 if 2 <= s <= 4 else 0)
     combined['LargeFamily'] = combined['FamilySize'].map(lambda s: 1 if 5 <= s else 0)
+
+
+def get_result(predicted):
+    print "F1_Score: " + str(f1_score(y_validation, predicted, average='macro'))
+    print "accuracy: " + str(accuracy_score(y_validation, predicted))
+    print "AUC: " + str(roc_auc_score(y_validation, predicted))
+    print "recall: " + str(recall_score(y_validation, predicted))
+    return
 
 
 # Load data
@@ -196,3 +214,92 @@ process_ticket()
 # binary
 process_family()
 
+# Split data to validation and train
+m = len(train)
+n = len(test)
+
+x_train = combined[0:m]
+x_test = combined[m:m + n]
+
+train_percent = 0.66
+validate_percent = 0.33
+
+m = len(x_train)
+x_train = x_train[:int(train_percent * m)]
+x_validation = x_train[int(validate_percent * m):]
+y_train = y_train[:int(train_percent * m)]
+y_validation = y_train[int(validate_percent * m):]
+
+# Decision tree
+dtc = DecisionTreeClassifier(max_depth=5)
+dtc.fit(x_train, y_train)
+y_predicted_validation_dtc = dtc.predict(x_validation)
+# y_predicted_test_dtc = dtc.predict(x_test)
+
+print "- Decision tree -"
+get_result(y_predicted_validation_dtc)
+
+# Random forest
+rfc = RandomForestClassifier()
+rfc = rfc.fit(x_train, y_train)
+y_predicted_validation_rfc = rfc.predict(x_validation)
+# y_prediction_test_rfc = rfc.predict(x_train)
+
+print "- Random forest -"
+get_result(y_predicted_validation_rfc)
+
+# Neural network
+nn = MLPClassifier(solver='lbfgs', alpha=1e-5, hidden_layer_sizes=(5, 2), random_state=1)
+nn.fit(x_train, y_train)
+y_predicted_validation_nn = nn.predict(x_validation)
+# y_predicted_test_nn = nn.predict(x_test)
+
+print "- Neural network -"
+get_result(y_predicted_validation_nn)
+
+# Logistic regression
+lr = LogisticRegression()
+lr.fit(x_train, y_train)
+y_predicted_validation_lr = lr.predict(x_validation)
+# y_prediction_test_lr = lr.predict(x_test)
+
+print "- Logistic regression -"
+get_result(y_predicted_validation_lr)
+
+# Ensemble of classifiers
+
+# Voting classifier
+vc = VotingClassifier(estimators=[('dt', dtc), ('rf', rfc), ('lr', lr)], voting='soft')
+vc.fit(x_train, y_train)
+y_predicted_validation_vc = vc.predict(x_validation)
+# y_prediction_test_vc = vc.predict(x_test)
+
+print "- Voting -"
+get_result(y_predicted_validation_vc)
+
+# AdaBoost classifier
+bdt = AdaBoostClassifier(DecisionTreeClassifier(max_depth=1), algorithm="SAMME", n_estimators=200)
+bdt.fit(x_train, y_train)
+y_predicted_validation_bdt = vc.predict(x_validation)
+# y_prediction_test_bdt = vc.predict(x_test)
+
+print "- AdaBoost -"
+get_result(y_predicted_validation_bdt)
+
+# Gradient Boosting classifier
+gb = GradientBoostingClassifier(n_estimators=100, learning_rate=1.0, max_depth=1, random_state=0)
+gb.fit(x_train, y_train)
+y_predicted_validation_gb = gb.predict(x_validation)
+# y_prediction_test_gb = gb.predict(x_test)
+
+print "- Gradient Boosting -"
+get_result(y_predicted_validation_gb)
+
+# Bagging classifier
+bg = BaggingClassifier(base_estimator=DecisionTreeClassifier(), n_estimators=100, random_state=7)
+bg.fit(x_train, y_train)
+y_predicted_validation_bg = bg.predict(x_validation)
+# y_prediction_test_bg = bg.predict(x_test)
+
+print "- Bagging  -"
+get_result(y_predicted_validation_bg)
